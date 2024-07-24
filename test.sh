@@ -78,6 +78,21 @@ display_partition_table() {
     parted $DRIVE print || error_exit "Failed to display partition table of $DRIVE"
 }
 
+# Function to mount partitions
+mount_partitions() {
+    echo "Mounting partitions"
+    mkdir -p /mnt/boot /mnt/root /mnt/home
+
+    mount $BOOT_PART /mnt/boot || error_exit "Failed to mount boot partition"
+    echo "Mounted $BOOT_PART at /mnt/boot"
+
+    mount $ROOT_PART /mnt/root || error_exit "Failed to mount root partition"
+    echo "Mounted $ROOT_PART at /mnt/root"
+
+    mount $HOME_PART /mnt/home || error_exit "Failed to mount home partition"
+    echo "Mounted $HOME_PART at /mnt/home"
+}
+
 # Function to confirm action with the user
 confirm_action() {
     echo "The script will perform the following actions on $DRIVE:"
@@ -86,6 +101,7 @@ confirm_action() {
     echo "3. Create an 80GB ext4 root partition with label ROOT."
     echo "4. Create an ext4 home partition using the remaining space with label HOME."
     echo "5. Format the partitions accordingly."
+    echo "6. Mount the partitions to /mnt/boot, /mnt/root, and /mnt/home."
     read -p "Are you sure you want to proceed? (yes/no): " CONFIRM
     if [[ $CONFIRM != "yes" ]]; then
         error_exit "User aborted the operation."
@@ -97,6 +113,7 @@ confirm_action
 create_partitions
 format_partitions
 display_partition_table
+mount_partitions
 
 # Disable debugging
 set +x
