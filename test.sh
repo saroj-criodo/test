@@ -81,13 +81,13 @@ display_partition_table() {
 # Function to mount partitions
 mount_partitions() {
     echo "Mounting partitions"
-    mkdir -p /mnt/boot /mnt/root /mnt/home
+    mkdir -p /mnt/boot /mnt/home
+
+    mount $ROOT_PART /mnt || error_exit "Failed to mount root partition"
+    echo "Mounted $ROOT_PART at /mnt"
 
     mount $BOOT_PART /mnt/boot || error_exit "Failed to mount boot partition"
     echo "Mounted $BOOT_PART at /mnt/boot"
-
-    mount $ROOT_PART /mnt/root || error_exit "Failed to mount root partition"
-    echo "Mounted $ROOT_PART at /mnt/root"
 
     mount $HOME_PART /mnt/home || error_exit "Failed to mount home partition"
     echo "Mounted $HOME_PART at /mnt/home"
@@ -101,7 +101,7 @@ confirm_action() {
     echo "3. Create an 80GB ext4 root partition with label ROOT."
     echo "4. Create an ext4 home partition using the remaining space with label HOME."
     echo "5. Format the partitions accordingly."
-    echo "6. Mount the partitions to /mnt/boot, /mnt/root, and /mnt/home."
+    echo "6. Mount the partitions to /mnt, /mnt/boot, and /mnt/home."
     read -p "Are you sure you want to proceed? (yes/no): " CONFIRM
     if [[ $CONFIRM != "yes" ]]; then
         error_exit "User aborted the operation."
