@@ -94,7 +94,6 @@ confirm_action() {
 
 # Execute functions
 confirm_action
-unmount_partitions
 create_partitions
 format_partitions
 display_partition_table
