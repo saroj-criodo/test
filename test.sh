@@ -78,18 +78,26 @@ display_partition_table() {
     parted $DRIVE print || error_exit "Failed to display partition table of $DRIVE"
 }
 
+# Function to verify partitions
+verify_partitions() {
+    echo "Verifying partitions"
+    blkid $BOOT_PART | grep -q "TYPE=\"vfat\"" || error_exit "Boot partition is not FAT32"
+    blkid $ROOT_PART | grep -q "TYPE=\"ext4\"" || error_exit "Root partition is not ext4"
+    blkid $HOME_PART | grep -q "TYPE=\"ext4\"" || error_exit "Home partition is not ext4"
+}
+
 # Function to mount partitions
 mount_partitions() {
     echo "Mounting partitions"
-    mkdir -p /mnt/boot /mnt/home
+    mkdir -p /mnt /mnt/boot /mnt/home
 
-    mount $ROOT_PART /mnt || error_exit "Failed to mount root partition"
+    mount $ROOT_PART /mnt || (dmesg | tail -n 10 && error_exit "Failed to mount root partition")
     echo "Mounted $ROOT_PART at /mnt"
 
-    mount $BOOT_PART /mnt/boot || error_exit "Failed to mount boot partition"
+    mount $BOOT_PART /mnt/boot || (dmesg | tail -n 10 && error_exit "Failed to mount boot partition")
     echo "Mounted $BOOT_PART at /mnt/boot"
 
-    mount $HOME_PART /mnt/home || error_exit "Failed to mount home partition"
+    mount $HOME_PART /mnt/home || (dmesg | tail -n 10 && error_exit "Failed to mount home partition")
     echo "Mounted $HOME_PART at /mnt/home"
 }
 
@@ -101,7 +109,8 @@ confirm_action() {
     echo "3. Create an 80GB ext4 root partition with label ROOT."
     echo "4. Create an ext4 home partition using the remaining space with label HOME."
     echo "5. Format the partitions accordingly."
-    echo "6. Mount the partitions to /mnt, /mnt/boot, and /mnt/home."
+    echo "6. Verify the partitions."
+    echo "7. Mount the partitions to /mnt, /mnt/boot, and /mnt/home."
     read -p "Are you sure you want to proceed? (yes/no): " CONFIRM
     if [[ $CONFIRM != "yes" ]]; then
         error_exit "User aborted the operation."
@@ -110,14 +119,16 @@ confirm_action() {
 
 # Execute functions
 confirm_action
+unmount_partitions
 create_partitions
 format_partitions
 display_partition_table
+verify_partitions
 mount_partitions
 
 # Disable debugging
 set +x
 
-echo "Partitioning and formatting of $DRIVE completed successfully."
+echo "Partitioning, formatting, and mounting of $DRIVE completed successfully."
 
 exit 0
