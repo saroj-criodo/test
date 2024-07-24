@@ -1,8 +1,15 @@
 #!/bin/bash
 
+# Partition variables
+BOOT_SIZE="2GB"
+ROOT_SIZE="80GB"
+BOOT_LABEL="BOOT"
+ROOT_LABEL="ROOT"
+HOME_LABEL="HOME"
+
 # Function to display usage information
 usage() {
-    echo "Usage: $0 /dev/sdX"
+    echo "Usage: $0 /dev/sdX [unmount|partition|format|verify|mount|all]"
     exit 1
 }
 
@@ -18,6 +25,7 @@ if [ -z "$1" ]; then
 fi
 
 DRIVE=$1
+ACTION=${2:-all}
 
 # Validate the drive identifier
 if [[ ! $DRIVE =~ ^/dev/sd[a-z]$ ]]; then
@@ -32,10 +40,13 @@ exec 2>&1
 # Enable debugging
 set -x
 
-echo "Starting partitioning and formatting of $DRIVE"
+BOOT_PART="${DRIVE}1"
+ROOT_PART="${DRIVE}2"
+HOME_PART="${DRIVE}3"
 
 # Function to unmount partitions
 unmount_partitions() {
+    echo "Unmounting partitions on $DRIVE"
     for PART in $(ls ${DRIVE}* 2>/dev/null | grep -E "${DRIVE}[0-9]+"); do
         umount $PART 2>/dev/null && echo "Unmounted $PART" || echo "Failed to unmount $PART"
     done
@@ -46,30 +57,27 @@ create_partitions() {
     echo "Creating a new GPT partition table on $DRIVE"
     parted -s $DRIVE mklabel gpt || error_exit "Failed to create GPT partition table on $DRIVE"
 
-    echo "Creating boot partition (2GB, FAT32)"
-    parted -s -a optimal $DRIVE mkpart primary fat32 0% 2GB || error_exit "Failed to create boot partition"
+    echo "Creating boot partition (${BOOT_SIZE}, FAT32)"
+    parted -s -a optimal $DRIVE mkpart primary fat32 0% ${BOOT_SIZE} || error_exit "Failed to create boot partition"
     parted -s $DRIVE set 1 boot on || error_exit "Failed to set boot flag on boot partition"
-    BOOT_PART="${DRIVE}1"
 
-    echo "Creating root partition (80GB, ext4)"
-    parted -s -a optimal $DRIVE mkpart primary ext4 2GB 82GB || error_exit "Failed to create root partition"
-    ROOT_PART="${DRIVE}2"
+    echo "Creating root partition (${ROOT_SIZE}, ext4)"
+    parted -s -a optimal $DRIVE mkpart primary ext4 ${BOOT_SIZE} $((${BOOT_SIZE%GB} + ${ROOT_SIZE%GB}))GB || error_exit "Failed to create root partition"
 
     echo "Creating home partition (remaining space, ext4)"
-    parted -s -a optimal $DRIVE mkpart primary ext4 82GB 100% || error_exit "Failed to create home partition"
-    HOME_PART="${DRIVE}3"
+    parted -s -a optimal $DRIVE mkpart primary ext4 $((${BOOT_SIZE%GB} + ${ROOT_SIZE%GB}))GB 100% || error_exit "Failed to create home partition"
 }
 
 # Function to format partitions
 format_partitions() {
-    echo "Formatting $BOOT_PART as FAT32 with label BOOT"
-    mkfs.vfat -F 32 -n BOOT $BOOT_PART || error_exit "Failed to format boot partition as FAT32"
+    echo "Formatting $BOOT_PART as FAT32 with label $BOOT_LABEL"
+    mkfs.vfat -F 32 -n $BOOT_LABEL $BOOT_PART || error_exit "Failed to format boot partition as FAT32"
 
-    echo "Formatting $ROOT_PART as ext4 with label ROOT"
-    mkfs.ext4 -L ROOT $ROOT_PART || error_exit "Failed to format root partition as ext4"
+    echo "Formatting $ROOT_PART as ext4 with label $ROOT_LABEL"
+    mkfs.ext4 -L $ROOT_LABEL $ROOT_PART || error_exit "Failed to format root partition as ext4"
 
-    echo "Formatting $HOME_PART as ext4 with label HOME"
-    mkfs.ext4 -L HOME $HOME_PART || error_exit "Failed to format home partition as ext4"
+    echo "Formatting $HOME_PART as ext4 with label $HOME_LABEL"
+    mkfs.ext4 -L $HOME_LABEL $HOME_PART || error_exit "Failed to format home partition as ext4"
 }
 
 # Function to display the partition table
@@ -105,9 +113,9 @@ mount_partitions() {
 confirm_action() {
     echo "The script will perform the following actions on $DRIVE:"
     echo "1. Create a new GPT partition table."
-    echo "2. Create a 2GB FAT32 boot partition with label BOOT."
-    echo "3. Create an 80GB ext4 root partition with label ROOT."
-    echo "4. Create an ext4 home partition using the remaining space with label HOME."
+    echo "2. Create a ${BOOT_SIZE} FAT32 boot partition with label $BOOT_LABEL."
+    echo "3. Create an ${ROOT_SIZE} ext4 root partition with label $ROOT_LABEL."
+    echo "4. Create an ext4 home partition using the remaining space with label $HOME_LABEL."
     echo "5. Format the partitions accordingly."
     echo "6. Verify the partitions."
     echo "7. Mount the partitions to /mnt, /mnt/boot, and /mnt/home."
@@ -117,14 +125,37 @@ confirm_action() {
     fi
 }
 
-# Execute functions
+# Execute functions based on the action
 confirm_action
-unmount_partitions
-create_partitions
-format_partitions
-display_partition_table
-verify_partitions
-mount_partitions
+
+case $ACTION in
+    unmount)
+        unmount_partitions
+        ;;
+    partition)
+        create_partitions
+        ;;
+    format)
+        format_partitions
+        ;;
+    verify)
+        verify_partitions
+        ;;
+    mount)
+        mount_partitions
+        ;;
+    all)
+        unmount_partitions
+        create_partitions
+        format_partitions
+        display_partition_table
+        verify_partitions
+        mount_partitions
+        ;;
+    *)
+        usage
+        ;;
+esac
 
 # Disable debugging
 set +x
